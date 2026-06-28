@@ -5,7 +5,7 @@ from email.mime.text import MIMEText
 from googleapiclient.discovery import build
 from youtube_transcript_api import YouTubeTranscriptApi
 from dotenv import load_dotenv
-import os, tempfile, isodate, anthropic, smtplib
+import os, tempfile, isodate,smtplib
 from groq import Groq
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
