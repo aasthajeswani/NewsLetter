@@ -1,0 +1,7 @@
+google-api-python-client==2.120.0
+youtube-transcript-api==0.6.2
+anthropic==0.30.0
+isodate==0.6.1
+python-dotenv==1.0.0
+yt-dlp==2024.12.13
+groq==0.11.0
