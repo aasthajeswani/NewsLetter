@@ -17,9 +17,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install ffmpeg
-        run: sudo apt-get install -y ffmpeg
-
       - name: Show requirements.txt
         run: cat requirements.txt
 
@@ -36,9 +33,10 @@ jobs:
 
       - name: Run agent
         env:
-          YOUTUBE_API_KEY:  ${{ secrets.YOUTUBE_API_KEY }}
-          GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
-          EMAIL_FROM:       ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO:         ${{ secrets.EMAIL_TO }}
-          SMTP_PASS:        ${{ secrets.SMTP_PASS }}
+          YOUTUBE_API_KEY:    ${{ secrets.YOUTUBE_API_KEY }}
+          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
+          SUPADATA_API_KEY:   ${{ secrets.SUPADATA_API_KEY }}
+          EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO:           ${{ secrets.EMAIL_TO }}
+          SMTP_PASS:          ${{ secrets.SMTP_PASS }}
         run: python agent.py
