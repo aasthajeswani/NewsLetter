@@ -10,6 +10,8 @@ from groq import Groq
 import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
+import requests
+
 
 
 load_dotenv()
@@ -22,6 +24,7 @@ EMAIL_FROM   = os.environ["EMAIL_FROM"]
 EMAIL_TO     = os.environ["EMAIL_TO"]         # comma-separated for many recipients
 SMTP_HOST    = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT    = int(os.environ.get("SMTP_PORT", 587))
+SUPADATA_KEY = os.environ["SUPADATA_API_KEY"]
 SMTP_PASS    = os.environ["SMTP_PASS"]
 MIN_DURATION = 9 * 60      # 9 minute in seconds
 MAX_DURATION = 24 * 60  # 24 minutes in seconds
@@ -71,16 +74,37 @@ def get_todays_videos():
             })
     return results
 
+def get_transcript(video_id: str) -> dict:
+    """
+    Fetches transcript via Supadata API.
+    - Tries native captions (Hindi/English) first — 1 credit
+    - Falls back to AI-generated transcription if no captions — still 1 credit
+    - Works from any server including GitHub Actions
+    """
+    url = "https://api.supadata.ai/v1/youtube/transcript"
+    headers = {"x-api-key": SUPADATA_KEY}
+    params = {
+        "videoId": video_id,
+        "text": "true",   # returns plain string, not timestamped chunks
+    }
 
-def get_transcript(video_id: str) -> str:
-    """Fetch auto-generated or manual transcript, prefer English."""
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(
-            video_id, languages=["en", "hi"]
-        )
-        return " ".join(chunk["text"] for chunk in transcript)
-    except Exception:
-        return ""
+        resp = requests.get(url, headers=headers, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # data["content"] is plain text when text=true
+        text = data.get("content", "")
+        lang = data.get("lang", "unknown")
+
+        if not text:
+            return {"text": "", "lang": "unknown", "method": "failed"}
+
+        return {"text": text, "lang": lang, "method": "supadata"}
+
+    except Exception as e:
+        print(f"  Supadata transcript failed for {video_id}: {e}")
+        return {"text": "", "lang": "unknown", "method": "failed"}
 
 
 # def summarise(title: str, transcript: str) -> dict:
@@ -118,62 +142,62 @@ def fmt_duration(secs: int) -> str:
     m, s = divmod(secs, 60)
     return f"{m}:{s:02d}"
 
-def get_transcript(video_id: str) -> dict:
-    """
-    Returns {"text": "...", "lang": "hi"/"en", "method": "captions"/"whisper"}
-    Layer 1: YouTube captions (Hindi or English)
-    Layer 2: yt-dlp audio download + Groq Whisper transcription
-    """
-    # --- Layer 1: captions ---
-    try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        # Try Hindi first (StudyIQ's primary language), then English
-        for lang in ["hi", "en", "en-IN"]:
-            try:
-                t = transcript_list.find_transcript([lang])
-                chunks = t.fetch()
-                text = " ".join(c["text"] for c in chunks)
-                return {"text": text, "lang": lang, "method": "captions"}
-            except Exception:
-                continue
-        # Try any auto-generated caption
-        for t in transcript_list:
-            chunks = t.fetch()
-            text = " ".join(c["text"] for c in chunks)
-            return {"text": text, "lang": t.language_code, "method": "captions"}
-    except (TranscriptsDisabled, NoTranscriptFound):
-        pass
-    except Exception:
-        pass
+# def get_transcript(video_id: str) -> dict:
+#     """
+#     Returns {"text": "...", "lang": "hi"/"en", "method": "captions"/"whisper"}
+#     Layer 1: YouTube captions (Hindi or English)
+#     Layer 2: yt-dlp audio download + Groq Whisper transcription
+#     """
+#     # --- Layer 1: captions ---
+#     try:
+#         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+#         # Try Hindi first (StudyIQ's primary language), then English
+#         for lang in ["hi", "en", "en-IN"]:
+#             try:
+#                 t = transcript_list.find_transcript([lang])
+#                 chunks = t.fetch()
+#                 text = " ".join(c["text"] for c in chunks)
+#                 return {"text": text, "lang": lang, "method": "captions"}
+#             except Exception:
+#                 continue
+#         # Try any auto-generated caption
+#         for t in transcript_list:
+#             chunks = t.fetch()
+#             text = " ".join(c["text"] for c in chunks)
+#             return {"text": text, "lang": t.language_code, "method": "captions"}
+#     except (TranscriptsDisabled, NoTranscriptFound):
+#         pass
+#     except Exception:
+#         pass
 
-    # --- Layer 2: yt-dlp + Groq Whisper ---
-    try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": os.path.join(tmpdir, f"{video_id}"),
-                "postprocessors": [{
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "64",   # low bitrate = smaller file = faster upload
-                }],
-                "quiet": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([f"https://youtu.be/{video_id}"])
+#     # --- Layer 2: yt-dlp + Groq Whisper ---
+#     try:
+#         with tempfile.TemporaryDirectory() as tmpdir:
+#             audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
+#             ydl_opts = {
+#                 "format": "bestaudio/best",
+#                 "outtmpl": os.path.join(tmpdir, f"{video_id}"),
+#                 "postprocessors": [{
+#                     "key": "FFmpegExtractAudio",
+#                     "preferredcodec": "mp3",
+#                     "preferredquality": "64",   # low bitrate = smaller file = faster upload
+#                 }],
+#                 "quiet": True,
+#             }
+#             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+#                 ydl.download([f"https://youtu.be/{video_id}"])
 
-            with open(audio_path, "rb") as f:
-                result = groq_client.audio.transcriptions.create(
-                    file=(f"{video_id}.mp3", f.read()),
-                    model="whisper-large-v3-turbo",
-                    response_format="text",
-                    language="hi",   # hint: StudyIQ is primarily Hindi
-                )
-            return {"text": str(result), "lang": "hi", "method": "whisper"}
-    except Exception as e:
-        print(f"  Whisper fallback failed for {video_id}: {e}")
-        return {"text": "", "lang": "unknown", "method": "failed"}
+#             with open(audio_path, "rb") as f:
+#                 result = groq_client.audio.transcriptions.create(
+#                     file=(f"{video_id}.mp3", f.read()),
+#                     model="whisper-large-v3-turbo",
+#                     response_format="text",
+#                     language="hi",   # hint: StudyIQ is primarily Hindi
+#                 )
+#             return {"text": str(result), "lang": "hi", "method": "whisper"}
+#     except Exception as e:
+#         print(f"  Whisper fallback failed for {video_id}: {e}")
+#         return {"text": "", "lang": "unknown", "method": "failed"}
 
 
 def summarise(title: str, transcript_data: dict) -> dict:
