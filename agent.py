@@ -61,17 +61,36 @@ def get_todays_videos():
     ).execute()
 
     results = []
+    # for item in details.get("items", []):
+    #     dur_iso  = item["contentDetails"]["duration"]
+    #     dur_secs = isodate.parse_duration(dur_iso).total_seconds()
     for item in details.get("items", []):
-        dur_iso  = item["contentDetails"]["duration"]
-        dur_secs = isodate.parse_duration(dur_iso).total_seconds()
-        if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
-            results.append({
-                "id":        item["id"],
-                "title":     item["snippet"]["title"],
-                "url":       f"https://youtu.be/{item['id']}",
-                "duration":  int(dur_secs),
-                "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
-            })
+    content = item.get("contentDetails", {})
+    dur_iso = content.get("duration")
+
+    if not dur_iso:
+        print(f"Skipping video {item.get('id')} because duration is missing.")
+        print(item)
+        continue
+
+    dur_secs = isodate.parse_duration(dur_iso).total_seconds()
+
+    if MIN_DURATION <= dur_secs < MAX_DURATION:
+        results.append({
+            "id": item["id"],
+            "title": item["snippet"]["title"],
+            "url": f"https://youtu.be/{item['id']}",
+            "duration": int(dur_secs),
+            "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
+        })
+        # if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
+        #     results.append({
+        #         "id":        item["id"],
+        #         "title":     item["snippet"]["title"],
+        #         "url":       f"https://youtu.be/{item['id']}",
+        #         "duration":  int(dur_secs),
+        #         "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
+        #     })
     return results
 
 def get_transcript(video_id: str) -> dict:
@@ -226,7 +245,7 @@ Video Title:
 {title}
 
 Transcript:
-{text[:12000]}
+{text[:5000]}
 
 Return output in EXACT format:
 
