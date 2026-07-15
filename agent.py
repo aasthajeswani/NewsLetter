@@ -37,6 +37,24 @@ groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 youtube = build("youtube", "v3", developerKey=YT_API_KEY)
 #claude  = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
+PROMO_KEYWORDS = [
+    # batch/course promotions
+    "batch", "course", "admission", "enroll", "enrollment", "join now",
+    "seats filling", "limited seats", "new batch", "demo class", "free class",
+    "scholarship", "discount", "offer", "% off", "flat off",
+    # registration / sales
+    "register", "registration", "sign up", "signup", "buy now",
+    "link in description", "use code", "coupon", "promo code",
+    # generic marketing signals
+    "launching", "launch", "introducing", "announcing", "announcement",
+    "webinar", "live class", "doubt session", "crash course",
+]
+
+def is_promotional(title: str, description: str = "") -> bool:
+    """Return True if the video is likely a promotional or batch-ad video."""
+    text = (title + " " + description).lower()
+    return any(kw in text for kw in PROMO_KEYWORDS)
+
 
 def get_todays_videos():
     """Return list of video dicts published today, duration < 24 min."""
@@ -63,30 +81,49 @@ def get_todays_videos():
         part="contentDetails,snippet",
         id=",".join(video_ids),
     ).execute()
-
+    
     results = []
     # for item in details.get("items", []):
     #     dur_iso  = item["contentDetails"]["duration"]
     #     dur_secs = isodate.parse_duration(dur_iso).total_seconds()
+    # for item in details.get("items", []):
+    #     content = item.get("contentDetails", {})
+    #     dur_iso = content.get("duration")
+    
+    #     if not dur_iso:
+    #         print(f"Skipping video {item.get('id')} because duration is missing.")
+    #         print(item)
+    #         continue
+    
+    #     dur_secs = isodate.parse_duration(dur_iso).total_seconds()
+    
+    #     if MIN_DURATION <= dur_secs < MAX_DURATION:
+    #         results.append({
+    #             "id": item["id"],
+    #             "title": item["snippet"]["title"],
+    #             "url": f"https://youtu.be/{item['id']}",
+    #             "duration": int(dur_secs),
+    #             "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
+    #         })
+    results = []
     for item in details.get("items", []):
-        content = item.get("contentDetails", {})
-        dur_iso = content.get("duration")
-    
-        if not dur_iso:
-            print(f"Skipping video {item.get('id')} because duration is missing.")
-            print(item)
-            continue
-    
+        dur_iso  = item["contentDetails"]["duration"]
         dur_secs = isodate.parse_duration(dur_iso).total_seconds()
-    
-        if MIN_DURATION <= dur_secs < MAX_DURATION:
+        title    = item["snippet"]["title"]
+        desc     = item["snippet"].get("description", "")
+
+        if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
+            if is_promotional(title, desc):
+                print(f"  Skipped (promo): {title}")
+                continue
             results.append({
-                "id": item["id"],
-                "title": item["snippet"]["title"],
-                "url": f"https://youtu.be/{item['id']}",
-                "duration": int(dur_secs),
+                "id":        item["id"],
+                "title":     title,
+                "url":       f"https://youtu.be/{item['id']}",
+                "duration":  int(dur_secs),
                 "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
             })
+            
         # if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
         #     results.append({
         #         "id":        item["id"],
