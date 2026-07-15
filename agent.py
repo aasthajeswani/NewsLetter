@@ -51,10 +51,23 @@ PROMO_KEYWORDS = [
     "webinar", "live class", "doubt session", "crash course",
 ]
 
-def is_promotional(title: str, description: str = "") -> bool:
-    """Return True if the video is likely a promotional or batch-ad video."""
-    text = (title + " " + description).lower()
-    return any(kw in text for kw in PROMO_KEYWORDS)
+def is_promotional(title: str) -> bool:
+    title = title.lower()
+
+    promo_words = [
+        "batch",
+        "course",
+        "admission",
+        "enroll",
+        "scholarship",
+        "discount",
+        "webinar",
+        "demo class",
+        "live class",
+        "crash course",
+    ]
+
+    return any(word in title for word in promo_words)
 
 
 def get_todays_videos():
@@ -151,7 +164,7 @@ def get_todays_videos():
         desc = item.get("snippet", {}).get("description", "")
     
         if MIN_DURATION <= dur_secs < MAX_DURATION:
-            if is_promotional(title, desc):
+            if is_promotional(title):
                 print(f"Skipped (promo): {title}")
                 continue
     
