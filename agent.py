@@ -15,6 +15,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.proxies import WebshareProxyConfig
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 import requests
+import json
 
 load_dotenv()
 
@@ -81,6 +82,10 @@ def get_todays_videos():
         part="contentDetails,snippet",
         id=",".join(video_ids),
     ).execute()
+
+    print("========== videos.list response ==========")
+    print(json.dumps(details, indent=2))
+    print("==========================================")
     
     results = []
     # for item in details.get("items", []):
@@ -106,21 +111,55 @@ def get_todays_videos():
     #             "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
     #         })
     results = []
-    for item in details.get("items", []):
-        dur_iso  = item["contentDetails"]["duration"]
-        dur_secs = isodate.parse_duration(dur_iso).total_seconds()
-        title    = item["snippet"]["title"]
-        desc     = item["snippet"].get("description", "")
+    # for item in details.get("items", []):
+    #     dur_iso  = item["contentDetails"]["duration"]
+    #     dur_secs = isodate.parse_duration(dur_iso).total_seconds()
+    #     title    = item["snippet"]["title"]
+    #     desc     = item["snippet"].get("description", "")
 
-        if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
+    #     if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
+    #         if is_promotional(title, desc):
+    #             print(f"  Skipped (promo): {title}")
+    #             continue
+    #         results.append({
+    #             "id":        item["id"],
+    #             "title":     title,
+    #             "url":       f"https://youtu.be/{item['id']}",
+    #             "duration":  int(dur_secs),
+    #             "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
+    #         })
+    print(f"Requested IDs: {video_ids}")
+    print(f"Returned items: {len(details.get('items', []))}")
+    for item in details.get("items", []):
+        content = item.get("contentDetails")
+        if not content:
+            print(f"Skipping {item.get('id')} - no contentDetails")
+            continue
+    
+        dur_iso = content.get("duration")
+        if not dur_iso:
+            print(f"Skipping {item.get('id')} - no duration")
+            continue
+    
+        try:
+            dur_secs = isodate.parse_duration(dur_iso).total_seconds()
+        except Exception as e:
+            print(f"Skipping {item.get('id')} - invalid duration {dur_iso}: {e}")
+            continue
+    
+        title = item.get("snippet", {}).get("title", "")
+        desc = item.get("snippet", {}).get("description", "")
+    
+        if MIN_DURATION <= dur_secs < MAX_DURATION:
             if is_promotional(title, desc):
-                print(f"  Skipped (promo): {title}")
+                print(f"Skipped (promo): {title}")
                 continue
+    
             results.append({
-                "id":        item["id"],
-                "title":     title,
-                "url":       f"https://youtu.be/{item['id']}",
-                "duration":  int(dur_secs),
+                "id": item["id"],
+                "title": title,
+                "url": f"https://youtu.be/{item['id']}",
+                "duration": int(dur_secs),
                 "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
             })
             
