@@ -39,4 +39,6 @@ jobs:
           EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
           EMAIL_TO:           ${{ secrets.EMAIL_TO }}
           SMTP_PASS:          ${{ secrets.SMTP_PASS }}
+          WEBSHARE_USER: ${{ secrets.WEBSHARE_USER }}
+          WEBSHARE_PASS: ${{ secrets.WEBSHARE_PASS }}
         run: python agent.py
