@@ -26,16 +26,49 @@ EMAIL_FROM   = os.environ["EMAIL_FROM"]
 EMAIL_TO     = os.environ["EMAIL_TO"]         # comma-separated for many recipients
 SMTP_HOST    = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT    = int(os.environ.get("SMTP_PORT", 587))
-SUPADATA_KEY = os.environ["SUPADATA_API_KEY"]
+# SUPADATA_KEY = os.environ["SUPADATA_API_KEY"]
+SUPADATA_KEYS = [
+    os.environ["SUPADATA_API_KEY_1"],
+    os.environ["SUPADATA_API_KEY_2"],
+]
 SMTP_PASS    = os.environ["SMTP_PASS"]
 # WEBSHARE_USER = os.environ["WEBSHARE_USER"]
 # WEBSHARE_PASS = os.environ["WEBSHARE_PASS"]
 MIN_DURATION = 9 * 60      # 9 minute in seconds
 MAX_DURATION = 24 * 60  # 24 minutes in seconds
+PROMO_KEYWORDS = [
+    "batch",
+    "course",
+    "foundation",
+    "admission",
+    "enroll",
+    "enrol",
+    "registration",
+    "launch",
+    "offer",
+    "discount",
+    "scholarship",
+    "webinar",
+    "masterclass",
+    "orientation",
+    "demo",
+    "free class",
+    "strategy session",
+    "test series",
+    "mock test",
+    "answer writing",
+    "mentorship",
+    "join now",
+    "limited seats",
+]
 
 groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 youtube = build("youtube", "v3", developerKey=YT_API_KEY)
 #claude  = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+
+def is_promotional(title: str) -> bool:
+    title = title.lower()
+    return any(keyword in title for keyword in PROMO_KEYWORDS)
 
 
 def get_todays_videos():
@@ -70,6 +103,11 @@ def get_todays_videos():
     #     dur_secs = isodate.parse_duration(dur_iso).total_seconds()
     for item in details.get("items", []):
         content = item.get("contentDetails", {})
+        title = item["snippet"]["title"]
+
+        if is_promotional(title):
+            print(f"Skipping promotional video: {title}")
+            continue
         dur_iso = content.get("duration")
     
         if not dur_iso:
@@ -82,7 +120,7 @@ def get_todays_videos():
         if MIN_DURATION <= dur_secs < MAX_DURATION:
             results.append({
                 "id": item["id"],
-                "title": item["snippet"]["title"],
+                "title": title,
                 "url": f"https://youtu.be/{item['id']}",
                 "duration": int(dur_secs),
                 "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
@@ -105,29 +143,68 @@ def get_transcript(video_id: str) -> dict:
     - Works from any server including GitHub Actions
     """
     url = "https://api.supadata.ai/v1/youtube/transcript"
-    headers = {"x-api-key": SUPADATA_KEY}
-    params = {
-        "videoId": video_id,
-        "text": "true",   # returns plain string, not timestamped chunks
+    for key in SUPADATA_KEYS:
+        try:
+            resp = requests.get(
+                url,
+                headers={"x-api-key": key},
+                params={
+                    "videoId": video_id,
+                    "text": "true",
+                },
+                timeout=30,
+            )
+
+            # If quota is exhausted, try the next key
+            if resp.status_code in (402, 429):
+                print(f"Supadata quota exhausted for key: {key[:8]}...")
+                continue
+
+            resp.raise_for_status()
+
+            data = resp.json()
+
+            text = data.get("content", "")
+            lang = data.get("lang", "unknown")
+
+            if text.strip():
+                return {
+                    "text": text,
+                    "lang": lang,
+                    "method": "supadata",
+                }
+
+        except Exception as e:
+            print(f"Supadata failed: {e}")
+
+    return {
+        "text": "",
+        "lang": "unknown",
+        "method": "failed",
     }
+    # headers = {"x-api-key": SUPADATA_KEY}
+    # params = {
+    #     "videoId": video_id,
+    #     "text": "true",   # returns plain string, not timestamped chunks
+    # }
 
-    try:
-        resp = requests.get(url, headers=headers, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
+    # try:
+    #     resp = requests.get(url, headers=headers, params=params, timeout=30)
+    #     resp.raise_for_status()
+    #     data = resp.json()
 
-        # data["content"] is plain text when text=true
-        text = data.get("content", "")
-        lang = data.get("lang", "unknown")
+    #     # data["content"] is plain text when text=true
+    #     text = data.get("content", "")
+    #     lang = data.get("lang", "unknown")
 
-        if not text:
-            return {"text": "", "lang": "unknown", "method": "failed"}
+    #     if not text:
+    #         return {"text": "", "lang": "unknown", "method": "failed"}
 
-        return {"text": text, "lang": lang, "method": "supadata"}
+    #     return {"text": text, "lang": lang, "method": "supadata"}
 
-    except Exception as e:
-        print(f"  Supadata transcript failed for {video_id}: {e}")
-        return {"text": "", "lang": "unknown", "method": "failed"}
+    # except Exception as e:
+    #     print(f"  Supadata transcript failed for {video_id}: {e}")
+    #     return {"text": "", "lang": "unknown", "method": "failed"}
 
 
 # def get_transcript(video_id: str) -> dict:
