@@ -11,16 +11,11 @@ import yt_dlp
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 import requests
-# from youtube_transcript_api import YouTubeTranscriptApi
-# from youtube_transcript_api.proxies import WebshareProxyConfig
-# from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
-# import requests
 
 load_dotenv()
 
 YT_API_KEY   = os.environ["YOUTUBE_API_KEY"]
 CHANNEL_ID   = "UCrC8mOqJQpoB7NuIMKIS6rQ"  # StudyIQ Education
-#ANTHROPIC_KEY = os.environ["ANTHROPIC_API_KEY"]
 GROQ_KEY = os.environ["GROQ_API_KEY"]
 EMAIL_FROM   = os.environ["EMAIL_FROM"]
 EMAIL_TO     = os.environ["EMAIL_TO"]         # comma-separated for many recipients
@@ -32,8 +27,6 @@ SUPADATA_KEYS = [
     os.environ["SUPADATA_API_KEY_2"],
 ]
 SMTP_PASS    = os.environ["SMTP_PASS"]
-# WEBSHARE_USER = os.environ["WEBSHARE_USER"]
-# WEBSHARE_PASS = os.environ["WEBSHARE_PASS"]
 MIN_DURATION = 9 * 60      # 9 minute in seconds
 MAX_DURATION = 24 * 60  # 24 minutes in seconds
 PROMO_KEYWORDS = [
@@ -64,7 +57,6 @@ PROMO_KEYWORDS = [
 
 groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
 youtube = build("youtube", "v3", developerKey=YT_API_KEY)
-#claude  = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
 def is_promotional(title: str) -> bool:
     title = title.lower()
@@ -98,9 +90,6 @@ def get_todays_videos():
     ).execute()
 
     results = []
-    # for item in details.get("items", []):
-    #     dur_iso  = item["contentDetails"]["duration"]
-    #     dur_secs = isodate.parse_duration(dur_iso).total_seconds()
     for item in details.get("items", []):
         content = item.get("contentDetails", {})
         title = item["snippet"]["title"]
@@ -125,14 +114,6 @@ def get_todays_videos():
                 "duration": int(dur_secs),
                 "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
             })
-        # if dur_secs < MAX_DURATION and dur_secs >= MIN_DURATION:
-        #     results.append({
-        #         "id":        item["id"],
-        #         "title":     item["snippet"]["title"],
-        #         "url":       f"https://youtu.be/{item['id']}",
-        #         "duration":  int(dur_secs),
-        #         "thumbnail": item["snippet"]["thumbnails"]["high"]["url"],
-        #     })
     return results
 
 def get_transcript(video_id: str) -> dict:
@@ -182,183 +163,11 @@ def get_transcript(video_id: str) -> dict:
         "lang": "unknown",
         "method": "failed",
     }
-    # headers = {"x-api-key": SUPADATA_KEY}
-    # params = {
-    #     "videoId": video_id,
-    #     "text": "true",   # returns plain string, not timestamped chunks
-    # }
-
-    # try:
-    #     resp = requests.get(url, headers=headers, params=params, timeout=30)
-    #     resp.raise_for_status()
-    #     data = resp.json()
-
-    #     # data["content"] is plain text when text=true
-    #     text = data.get("content", "")
-    #     lang = data.get("lang", "unknown")
-
-    #     if not text:
-    #         return {"text": "", "lang": "unknown", "method": "failed"}
-
-    #     return {"text": text, "lang": lang, "method": "supadata"}
-
-    # except Exception as e:
-    #     print(f"  Supadata transcript failed for {video_id}: {e}")
-    #     return {"text": "", "lang": "unknown", "method": "failed"}
-
-
-# def get_transcript(video_id: str) -> dict:
-
-#     # --- Layer 1: youtube-transcript-api via Webshare residential proxy ---
-#     try:
-#         ytt = YouTubeTranscriptApi(
-#             proxy_config=WebshareProxyConfig(
-#                 proxy_username=WEBSHARE_USER,
-#                 proxy_password=WEBSHARE_PASS,
-#             )
-#         )
-#         transcript_list = ytt.list_transcripts(video_id)
-#         for lang in ["hi", "en", "en-IN"]:
-#             try:
-#                 t = transcript_list.find_transcript([lang])
-#                 chunks = t.fetch()
-#                 text = " ".join(c["text"] for c in chunks)
-#                 if text.strip():
-#                     return {"text": text, "lang": lang, "method": "proxy-captions"}
-#             except Exception:
-#                 continue
-#         # try any available language
-#         for t in transcript_list:
-#             chunks = t.fetch()
-#             text = " ".join(c["text"] for c in chunks)
-#             if text.strip():
-#                 return {"text": text, "lang": t.language_code, "method": "proxy-captions"}
-#     except Exception as e:
-#         print(f"  Layer 1 failed for {video_id}: {e}")
-
-#     # --- Layer 2: youtube-transcript.ai (free, no key, no credit limit) ---
-#     try:
-#         resp = requests.get(
-#             f"https://youtube-transcript.ai/api/transcript/{video_id}",
-#             timeout=20
-#         )
-#         if resp.status_code == 200:
-#             data = resp.json()
-#             text = " ".join(seg.get("text", "") for seg in data.get("transcript", []))
-#             if text.strip():
-#                 return {"text": text, "lang": data.get("lang", "unknown"), "method": "yt-transcript-ai"}
-#     except Exception as e:
-#         print(f"  Layer 2 failed for {video_id}: {e}")
-
-#     # --- Layer 3: Supadata (last resort only) ---
-#     try:
-#         resp = requests.get(
-#             "https://api.supadata.ai/v1/youtube/transcript",
-#             headers={"x-api-key": SUPADATA_KEY},
-#             params={"videoId": video_id, "text": "true"},
-#             timeout=30
-#         )
-#         resp.raise_for_status()
-#         data = resp.json()
-#         text = data.get("content", "")
-#         if text.strip():
-#             return {"text": text, "lang": data.get("lang", "unknown"), "method": "supadata"}
-#     except Exception as e:
-#         print(f"  Layer 3 (Supadata) failed for {video_id}: {e}")
-
-#     return {"text": "", "lang": "unknown", "method": "failed"}
-
-# def summarise(title: str, transcript: str) -> dict:
-#     """Ask Claude to return a structured summary."""
-#     if not transcript:
-#         return {"overview": "Transcript unavailable.", "key_points": []}
-
-#     prompt = f"""You are an expert educational content summariser.
-
-# Video title: {title}
-
-# Transcript:
-# {transcript[:12000]}
-
-# Respond in JSON with exactly these keys:
-# - "overview": 2-3 sentence plain-English summary of what the video covers.
-# - "key_points": list of 4-6 bullet strings (each ≤ 20 words), the most important facts/concepts.
-# - "topic_tags": list of 2-4 short topic labels (e.g. "Economy", "Polity", "Science & Tech").
-
-# Return only valid JSON, no markdown fences."""
-
-#     msg = claude.messages.create(
-#         model="claude-sonnet-4-6",
-#         max_tokens=1000,
-#         messages=[{"role": "user", "content": prompt}],
-#     )
-#     import json
-#     try:
-#         return json.loads(msg.content[0].text)
-#     except Exception:
-#         return {"overview": msg.content[0].text, "key_points": [], "topic_tags": []}
-
+    
 
 def fmt_duration(secs: int) -> str:
     m, s = divmod(secs, 60)
     return f"{m}:{s:02d}"
-
-# def get_transcript(video_id: str) -> dict:
-#     """
-#     Returns {"text": "...", "lang": "hi"/"en", "method": "captions"/"whisper"}
-#     Layer 1: YouTube captions (Hindi or English)
-#     Layer 2: yt-dlp audio download + Groq Whisper transcription
-#     """
-#     # --- Layer 1: captions ---
-#     try:
-#         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-#         # Try Hindi first (StudyIQ's primary language), then English
-#         for lang in ["hi", "en", "en-IN"]:
-#             try:
-#                 t = transcript_list.find_transcript([lang])
-#                 chunks = t.fetch()
-#                 text = " ".join(c["text"] for c in chunks)
-#                 return {"text": text, "lang": lang, "method": "captions"}
-#             except Exception:
-#                 continue
-#         # Try any auto-generated caption
-#         for t in transcript_list:
-#             chunks = t.fetch()
-#             text = " ".join(c["text"] for c in chunks)
-#             return {"text": text, "lang": t.language_code, "method": "captions"}
-#     except (TranscriptsDisabled, NoTranscriptFound):
-#         pass
-#     except Exception:
-#         pass
-
-#     # --- Layer 2: yt-dlp + Groq Whisper ---
-#     try:
-#         with tempfile.TemporaryDirectory() as tmpdir:
-#             audio_path = os.path.join(tmpdir, f"{video_id}.mp3")
-#             ydl_opts = {
-#                 "format": "bestaudio/best",
-#                 "outtmpl": os.path.join(tmpdir, f"{video_id}"),
-#                 "postprocessors": [{
-#                     "key": "FFmpegExtractAudio",
-#                     "preferredcodec": "mp3",
-#                     "preferredquality": "64",   # low bitrate = smaller file = faster upload
-#                 }],
-#                 "quiet": True,
-#             }
-#             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-#                 ydl.download([f"https://youtu.be/{video_id}"])
-
-#             with open(audio_path, "rb") as f:
-#                 result = groq_client.audio.transcriptions.create(
-#                     file=(f"{video_id}.mp3", f.read()),
-#                     model="whisper-large-v3-turbo",
-#                     response_format="text",
-#                     language="hi",   # hint: StudyIQ is primarily Hindi
-#                 )
-#             return {"text": str(result), "lang": "hi", "method": "whisper"}
-#     except Exception as e:
-#         print(f"  Whisper fallback failed for {video_id}: {e}")
-#         return {"text": "", "lang": "unknown", "method": "failed"}
 
 
 def summarise(title: str, transcript_data: dict) -> dict:
