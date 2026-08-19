@@ -31,25 +31,6 @@ jobs:
           pip show httpx
           pip show httpcore
 
-      - name: Test Groq model
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: |
-          python - <<'PY'
-          import os
-          from groq import Groq
-
-          client = Groq(api_key=os.environ["GROQ_API_KEY"])
-
-          models = client.models.list()
-          print("Available models:")
-          for m in models.data:
-              print(m.id)
-
-          print("\nTesting llama-3.3-70b-versatile...")
-          print(client.models.retrieve("llama-3.3-70b-versatile").id)
-          PY
-
       - name: Run agent
         env:
           YOUTUBE_API_KEY:    ${{ secrets.YOUTUBE_API_KEY }}
