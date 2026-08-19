@@ -216,7 +216,8 @@ tag1, tag2, tag3
 """
 
     resp = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        # model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-20b",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3
     )
